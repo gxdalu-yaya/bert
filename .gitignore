@@ -114,3 +114,19 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# 
+car_sent/
+chinese_L-12_H-768_A-12/
+ics_corpus/
+ics_ih/
+ics_ih_tfrecord/
+ics_pretrain_model/
+jni/
+lib/
+__MACOSX/
+model/
+__pycache__/
+uncased_L-12_H-768_A-12/
+xnli/
+log.*

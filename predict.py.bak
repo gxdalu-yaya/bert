@@ -1,0 +1,22 @@
+from tensorflow.contrib import predictor
+import tensorflow as tf
+import numpy as np
+import time
+
+
+
+export_dir = "./model/1541661765/"
+predict_fn = predictor.from_saved_model(export_dir)
+start = time.clock()
+batch = 60
+predictions = predict_fn(
+    {
+    "input_ids": np.random.randint(5, size=[batch,64]).tolist(),
+    "input_mask": np.random.randint(1, size=[batch,64]).tolist(),
+    "label_ids": np.random.randint(1, size=[batch]).tolist(),
+    "segment_ids": np.random.randint(1, size=[batch,64]).tolist(),
+    }
+  )
+end = time.clock()
+print((end-start)*1000)
+#print(predictions)

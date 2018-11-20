@@ -115,6 +115,10 @@ class FullTokenizer(object):
 
     return split_tokens
 
+  def tokenize2(self, text):
+    return [ch for ch in text if ch in self.vocab]
+    
+
   def convert_tokens_to_ids(self, tokens):
     return convert_tokens_to_ids(self.vocab, tokens)
 
