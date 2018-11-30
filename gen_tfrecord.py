@@ -6,6 +6,7 @@ index = sys.argv[2]
 index_source_file = source_file + "_" + index 
 print index_source_file
 
+#output_dir = "./ics_phone_tfrecord/"
 output_dir = "./ics_ih_tfrecord/"
 
 max_seq_length = 80

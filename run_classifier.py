@@ -73,11 +73,13 @@ flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
 flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
 
+flags.DEFINE_bool("do_predict", True, "Whether to run the model in inference mode on the test set.")
+
 flags.DEFINE_bool("do_savemodel", True, "Whether to save model.")
 
 flags.DEFINE_integer("train_batch_size", 8, "Total batch size for training.")
 
-flags.DEFINE_integer("eval_batch_size", 128, "Total batch size for eval.")
+flags.DEFINE_integer("eval_batch_size", 512, "Total batch size for eval.")
 
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
@@ -441,16 +443,16 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
   writer = tf.python_io.TFRecordWriter(output_file)
 
   for (ex_index, example) in enumerate(examples):
-    #tokens_a = tokenizer.tokenize(example.text_a)
-    tokens_a = tokenizer.tokenize2(example.text_a)
+    tokens_a = tokenizer.tokenize(example.text_a)
+    #tokens_a = tokenizer.tokenize2(example.text_a)
     if ex_index % 10000 == 0:
       #tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
       print("Writing example %d of %d" % (ex_index, len(examples)))
 
     tokens_b = None
     if example.text_b:
-      #tokens_b = tokenizer.tokenize(example.text_b)
-      tokens_b = tokenizer.tokenize2(example.text_b)
+      tokens_b = tokenizer.tokenize(example.text_b)
+      #tokens_b = tokenizer.tokenize2(example.text_b)
 
     if tokens_b:
       # Modifies `tokens_a` and `tokens_b` in place so that the total
@@ -574,6 +576,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   # If you want to use the token-level output, use model.get_sequence_output()
   # instead.
   output_layer = model.get_pooled_output()
+  output_layer = tf.identity(output_layer, name="sentence-vector")
 
   hidden_size = output_layer.shape[-1].value
 
@@ -584,13 +587,16 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   output_bias = tf.get_variable(
       "output_bias", [num_labels], initializer=tf.zeros_initializer())
 
-  with tf.variable_scope("loss"):
-    if is_training:
-      # I.e., 0.1 dropout
-      output_layer = tf.nn.dropout(output_layer, keep_prob=0.9)
+  if is_training:
+    # I.e., 0.1 dropout
+    output_layer = tf.nn.dropout(output_layer, keep_prob=0.9)
 
-    logits = tf.matmul(output_layer, output_weights, transpose_b=True)
-    logits = tf.nn.bias_add(logits, output_bias)
+  logits = tf.matmul(output_layer, output_weights, transpose_b=True)
+  logits = tf.nn.bias_add(logits, output_bias)
+  predict_probs = tf.nn.softmax(logits, name="predict_probs")
+
+  with tf.variable_scope("loss"):
+
     log_probs = tf.nn.log_softmax(logits, axis=-1)
 
     one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
@@ -713,7 +719,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
   return model_fn
 
 
-def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
+def input_fn_builder(input_file, seq_length, is_training, drop_remainder, _batch_size):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
   name_to_features = {
@@ -740,7 +746,7 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
   def input_fn(params):
     """The actual input function."""
     #batch_size = params["batch_size"]
-    batch_size = 128
+    batch_size = _batch_size
 
     # For training, we want a lot of parallel reading and shuffling.
     # For eval, we want no shuffling and parallel reading doesn't matter.
@@ -845,7 +851,7 @@ def main(_):
       #predict_batch_size=FLAGS.eval_batch_size)
 
   if FLAGS.do_train:
-    train_dir = "./ics_ih_tfrecord"
+    train_dir = "./ics_phone_tfrecord"
     train_tfrecord_files = [os.path.join(train_dir, train_file) for train_file in os.listdir(train_dir)]
     print(train_tfrecord_files)
     #train_file = os.path.join(FLAGS.output_dir, train_tfrecord_files)
@@ -859,7 +865,8 @@ def main(_):
         input_file=train_tfrecord_files,
         seq_length=FLAGS.max_seq_length,
         is_training=True,
-        drop_remainder=True)
+        drop_remainder=True, 
+        _batch_size=FLAGS.train_batch_size)
     train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=num_train_steps)
 
     eval_examples = processor.get_dev_examples(FLAGS.data_dir)
@@ -872,7 +879,8 @@ def main(_):
         input_file=eval_file,
         seq_length=FLAGS.max_seq_length,
         is_training=False,
-        drop_remainder=eval_drop_remainder)
+        drop_remainder=eval_drop_remainder,
+        _batch_size=FLAGS.eval_batch_size)
 
     def make_serving_input_receiver_fn():
       inputs = {"input_ids": tf.placeholder(shape=[None, FLAGS.max_seq_length], dtype=tf.int64, name="input_ids"), "input_mask": tf.placeholder(shape=[None, FLAGS.max_seq_length], dtype=tf.int64, name="input_mask"), "segment_ids": tf.placeholder(shape=[None, FLAGS.max_seq_length], dtype=tf.int64, name="segment_ids"), "label_ids": tf.placeholder(shape=[None], dtype=tf.int64, name="label_ids")}
@@ -963,7 +971,8 @@ def main(_):
         input_file=eval_file,
         seq_length=FLAGS.max_seq_length,
         is_training=False,
-        drop_remainder=eval_drop_remainder)
+        drop_remainder=eval_drop_remainder,
+        _batch_size=FLAGS.eval_batch_size)
 
     result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
 
@@ -980,6 +989,16 @@ def main(_):
       #return tf.estimator.export.ServingInputReceiver(inputs, inputs)
       return tf.estimator.export.build_raw_serving_input_receiver_fn(inputs)
     export_dir = estimator.export_savedmodel(export_dir_base="./model", serving_input_receiver_fn=make_serving_input_receiver_fn())
+  if FLAGS.do_predict:
+    result = estimator.predict(input_fn=eval_input_fn)
+    output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
+    with tf.gfile.GFile(output_predict_file, "w") as writer:
+      tf.logging.info("***** Predict results *****")
+      for example, prediction in zip(eval_examples, result):
+        print(prediction)
+        predict_score = prediction["prob"].tolist()
+        #output_line = str(label_list[predict_score.index(max(predict_score))].encode("utf-8")) + "\n" 
+        writer.write(example.text_a.encode("utf-8")+"\t"+example.text_b.encode("utf-8")+"\t"+str(max(predict_score))+"\t"+str(prediction["class"])+"\n")
 
 
 if __name__ == "__main__":

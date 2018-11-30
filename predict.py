@@ -37,8 +37,11 @@ logger.addHandler(handler)
 
 
 #word_index = load_wordindex("./conf/char.tsv")
-model_dir = "./miweb_model/"
-word_index = data_helpers.load_wordindex(os.path.join(model_dir, "word.tsv"))
+model_dir = sys.argv[1] 
+word_index = {}
+index = 0
+for line in open(os.path.join(model_dir, "vocab.txt")):
+    
 query = "小米圈铁耳机2购买方式"
 candidate = "小米圈铁耳机2购买方式"
 

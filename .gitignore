@@ -130,3 +130,8 @@ __pycache__/
 uncased_L-12_H-768_A-12/
 xnli/
 log.*
+ics_phone/
+ics_phone_tfrecord/
+ics_xw/
+ics_xw_tfrecord/
+phone_corpus/
