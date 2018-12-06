@@ -1,5 +1,40 @@
 # BERT
 
+在bert原作者的代码基础上, 做了一些改进.
+
+##  何时保存模型
+
+原作者的代码train和eval是分开的, 且train的时候不能做eval,看验证集的准确率,但是有时我们需要通过看验证集的准确率来决定哪个训练步数的模型是最佳的.
+
+通过使用**`tf.estimator.train_and_evaluate`**可以同时进行train和eval:
+
+```
+eval_spec = tf.estimator.EvalSpec(input_fn=eval_input_fn, exporters=exporter, steps=None, start_delay_secs=120, throttle_secs=600)
+tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+```
+eval_spec可以指定验证数据的输入, 以及输出模型的路径, start_delay_secs参数表示几秒后进行第一次验证, throttle_secs表示每隔几秒进行一次验证.
+```
+exporter = tf.estimator.BestExporter(
+      name="best_exporter",
+      serving_input_receiver_fn=make_serving_input_receiver_fn(),
+          compare_fn=_f1_bigger,
+      exports_to_keep=5)
+```
+通过指定exporter, 可以设置输出模型的输入, 以及保存最优模型的条件, 默认是loss最小, 但是可以通过设置compare_fn来定制条件, 我这里写的是f1值最大.
+
+## 离线处理好数据, 然后队列输入
+
+作者的代码读取大量数据时, 做数据预处理时,会耗费较长的时候, 此处可以先对数据并行做离线处理, 然后再指定处理好的数据路径, tf.data.TFRecordDataset(input_files), 可以通过队列读取数据,加快训练速度.
+
+## java代码读取导出的模型, 做线上预测
+
+见BertInference.java
+
+## tensorflow serving 部署模型, 以及java&&python预测代码
+
+comming soon...
+
+
 **\*\*\*\*\* New November 3rd, 2018: Multilingual and Chinese models avalable
 \*\*\*\*\***
 

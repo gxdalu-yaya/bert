@@ -42,8 +42,8 @@ word_index = {}
 index = 0
 for line in open(os.path.join(model_dir, "vocab.txt")):
     
-query = "小米圈铁耳机2购买方式"
-candidate = "小米圈铁耳机2购买方式"
+query = "sample"
+candidate = "哈哈哈哈哈哈"
 
 sent_pad_id = word_index["<pad>"]
 sent_unk_id = word_index["<unk>"]
